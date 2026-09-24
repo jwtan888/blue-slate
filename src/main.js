@@ -43,6 +43,7 @@ let editingExpenseId = null;
 let pendingReceipt = null;
 let removeReceiptOnSave = false;
 let toastTimer = null;
+let pendingExportFile = null;
 
 function loadState() {
   try {
@@ -417,8 +418,12 @@ async function handleAction(event) {
   if (action === "open-rates") renderRatesModal();
   if (action === "close-modal" && event.target === event.currentTarget) closeModal();
   if (action === "reset-trip") resetTrip();
-  if (action === "export-xlsx") await exportWorkbook();
+  if (action === "export-xlsx") {
+    try { await exportWorkbook(); }
+    catch (error) { console.error("Excel claim export failed:", error?.message || error); showToast("Could not create the Excel claim. Please try again."); }
+  }
   if (action === "export-receipts") await exportReceiptPack();
+  if (action === "share-export") sharePendingExport();
 }
 
 function closeModal() {
@@ -503,15 +508,46 @@ function clearTemplateRange(worksheet, startRow, endRow, startCol = 1, endCol = 
 }
 
 function exportFile(buffer, filename, type = "application/octet-stream") {
-  const blob = new Blob([buffer], { type });
-  const url = URL.createObjectURL(blob);
+  const file = new File([buffer], filename, { type });
+  pendingExportFile = null;
+  document.querySelectorAll('[data-action="share-export"]').forEach((button) => button.remove());
+  const exportCard = document.querySelector(".export-card");
+  if (exportCard && typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
+    pendingExportFile = file;
+    const button = document.createElement("button");
+    button.className = "secondary-button wide";
+    button.dataset.action = "share-export";
+    button.textContent = `Save or share ${filename}`;
+    button.addEventListener("click", sharePendingExport);
+    exportCard.appendChild(button);
+    showToast("File ready. Tap the button below, then choose Save to Files.");
+    return true;
+  }
+  const url = URL.createObjectURL(file);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return false;
+}
+
+function sharePendingExport() {
+  if (!pendingExportFile) return;
+  const file = pendingExportFile;
+  try {
+    navigator.share({ files: [file], title: file.name }).then(() => {
+      pendingExportFile = null;
+      document.querySelector('[data-action="share-export"]')?.remove();
+      showToast("File shared or saved");
+    }).catch((error) => {
+      showToast(error?.name === "AbortError" ? "Sharing cancelled" : "Could not share the file. Tap to try again.");
+    });
+  } catch {
+    showToast("Could not share the file. Tap to try again.");
+  }
 }
 
 function safeFilePart(value) {
@@ -597,8 +633,7 @@ async function exportWorkbook() {
   worksheet.getCell("D101").value = { formula: `SUM(D${CASH_RETURN_START_ROW}:D${CASH_RETURN_END_ROW})`, result: cashReturnTotal() };
   const output = await workbook.xlsx.writeBuffer();
   const filename = `${safeFilePart(profile.destination || "business-trip")}-expense-claim.xlsx`;
-  exportFile(output, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  showToast("Excel claim downloaded");
+  if (!exportFile(output, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) showToast("Excel claim downloaded");
 }
 
 async function exportReceiptPack() {
@@ -612,8 +647,7 @@ async function exportReceiptPack() {
     zip.file(`${String(index + 1).padStart(2, "0")}-${safeFilePart(expense.date)}-${safeFilePart(expense.details)}.${extension}`, receipt.blob);
   }
   const output = await zip.generateAsync({ type: "blob" });
-  exportFile(output, `${safeFilePart(state.profile.destination || "business-trip")}-receipts.zip`, "application/zip");
-  showToast("Receipt pack downloaded");
+  if (!exportFile(output, `${safeFilePart(state.profile.destination || "business-trip")}-receipts.zip`, "application/zip")) showToast("Receipt pack downloaded");
 }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
