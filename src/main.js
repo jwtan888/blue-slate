@@ -44,6 +44,7 @@ let pendingReceipt = null;
 let removeReceiptOnSave = false;
 let toastTimer = null;
 let pendingExportFile = null;
+let pendingDownloadUrl = null;
 
 function loadState() {
   try {
@@ -509,6 +510,9 @@ function clearTemplateRange(worksheet, startRow, endRow, startCol = 1, endCol = 
 
 function exportFile(buffer, filename, type = "application/octet-stream") {
   const file = new File([buffer], filename, { type });
+  if (pendingDownloadUrl) URL.revokeObjectURL(pendingDownloadUrl);
+  pendingDownloadUrl = null;
+  document.querySelectorAll(".export-download").forEach((link) => link.remove());
   const url = URL.createObjectURL(file);
   pendingExportFile = null;
   document.querySelectorAll('[data-action="share-export"]').forEach((button) => button.remove());
@@ -525,9 +529,9 @@ function exportFile(buffer, filename, type = "application/octet-stream") {
     downloadLink.href = url;
     downloadLink.download = filename;
     downloadLink.textContent = "Download Excel file instead";
+    pendingDownloadUrl = url;
     exportCard.appendChild(button);
     exportCard.appendChild(downloadLink);
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
     showToast("File ready. Share it, or tap Download Excel file instead.");
     return true;
   }
