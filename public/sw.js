@@ -1,4 +1,4 @@
-const CACHE_NAME = "trip-claims-v3";
+const CACHE_NAME = "trip-claims-v4";
 const APP_SHELL = ["", "index.html", "manifest.webmanifest", "icon.svg", "template.xlsx"].map(
   (path) => new URL(path, self.registration.scope).href,
 );
