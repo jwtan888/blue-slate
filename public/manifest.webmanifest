@@ -1,0 +1,19 @@
+{
+  "name": "Trip Claims",
+  "short_name": "Trip Claims",
+  "description": "Offline business-trip expense capture and Excel claim export.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#101828",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
