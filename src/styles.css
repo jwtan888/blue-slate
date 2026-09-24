@@ -68,6 +68,7 @@ button { cursor: pointer; }
 .receipt-tag { color: var(--success); background: #ecfdf3; }
 .card-actions { display: flex; gap: 8px; margin-top: 7px; }
 .card-actions button, .text-button { padding: 0; border: 0; background: transparent; color: var(--accent-dark); font-size: 11px; font-weight: 800; }
+.card-actions button:disabled { opacity: .35; cursor: not-allowed; }
 .danger-link { color: var(--danger) !important; }
 .empty-card { padding: 36px 22px; text-align: center; }
 .empty-icon { display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 13px; border-radius: 15px; color: var(--accent-dark); background: #fff7ed; font-size: 25px; }

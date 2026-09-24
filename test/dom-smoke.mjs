@@ -40,6 +40,26 @@ expenseForm.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable
 await wait();
 assert(window.document.body.textContent.includes("Sample meal"), "expense did not save in DOM smoke test");
 
+window.document.querySelector('[data-action="add-expense"]').click();
+const taxiForm = window.document.querySelector('form[data-form="expense"]');
+taxiForm.querySelector('[name="date"]').value = "2026-05-05";
+taxiForm.querySelector('[name="details"]').value = "Sample taxi";
+taxiForm.querySelector('[name="currency"]').value = "MYR";
+taxiForm.querySelector('[name="amount"]').value = "30";
+taxiForm.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+await wait();
+const expenseCards = () => [...window.document.querySelectorAll(".expense-card")];
+assert(expenseCards().map((card) => card.querySelector("h3").textContent).join(",") === "Sample taxi,Sample meal", "new expenses did not start in newest-first order");
+const mealCard = () => expenseCards().find((card) => card.querySelector("h3").textContent === "Sample meal");
+mealCard().querySelector('[data-action="move-expense-up"]').click();
+assert(expenseCards().map((card) => card.querySelector("h3").textContent).join(",") === "Sample meal,Sample taxi", "moving an expense up did not reorder the list");
+mealCard().querySelector('[data-action="move-expense-down"]').click();
+assert(expenseCards().map((card) => card.querySelector("h3").textContent).join(",") === "Sample taxi,Sample meal", "moving an expense down did not reorder the list");
+mealCard().querySelector('[data-action="move-expense-up"]').click();
+const displayedOrder = expenseCards().map((card) => card.querySelector('[data-action="edit-expense"]').dataset.id);
+const savedOrder = JSON.parse(window.localStorage.getItem("trip-claims-state-v1")).expenseOrder;
+assert(JSON.stringify(savedOrder) === JSON.stringify(displayedOrder), "manual expense order was not saved on this device");
+
 window.document.querySelector('[data-tab="trip"]').click();
 const tripForm = window.document.querySelector('form[data-form="trip"]');
 tripForm.querySelector('[name="name"]').value = "Sample User";
@@ -70,6 +90,7 @@ const sheet = workbook.getWorksheet("Expenses Reimbursement -Travel");
 assert(sheet, "exported workbook is missing the template sheet");
 assert(sheet.getCell("C6").value === "Sample City", "destination did not export");
 assert(sheet.getCell("B14").value === "Sample meal", "expense details did not export");
+assert(sheet.getCell("B15").value === "Sample taxi", "manual expense order did not carry into the Excel rows");
 assert(sheet.getCell("A14").value instanceof Date && sheet.getCell("A14").value.toISOString().startsWith("2026-05-04"), "expense date shifted during export");
 assert(sheet.getCell("F14").value === 120000, "VND amount did not export");
 assert(sheet.getCell("I14").value.result === 18, "VND-to-MYR reference did not export");

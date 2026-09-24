@@ -34,6 +34,7 @@ const defaultState = () => ({
   },
   advance: { USD: "", VND: "", MYR: "" },
   expenses: [],
+  expenseOrder: [],
   cashReturn: [],
 });
 
@@ -50,13 +51,21 @@ function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (!saved) return defaultState();
+    const expenses = Array.isArray(saved.expenses) ? saved.expenses : [];
+    const expenseIds = new Set(expenses.map((expense) => expense.id));
+    const expenseOrder = [...new Set((Array.isArray(saved.expenseOrder) ? saved.expenseOrder : []).filter((id) => expenseIds.has(id)))];
+    const orderedIds = new Set(expenseOrder);
+    expenses.slice().sort(sortExpenses).forEach((expense) => {
+      if (!orderedIds.has(expense.id)) expenseOrder.push(expense.id);
+    });
     return {
       ...defaultState(),
       ...saved,
       profile: { ...defaultState().profile, ...(saved.profile || {}) },
       rates: { ...defaultState().rates, ...(saved.rates || {}) },
       advance: { ...defaultState().advance, ...(saved.advance || {}) },
-      expenses: Array.isArray(saved.expenses) ? saved.expenses : [],
+      expenses,
+      expenseOrder,
       cashReturn: Array.isArray(saved.cashReturn) ? saved.cashReturn : [],
     };
   } catch {
@@ -260,13 +269,18 @@ function renderExpenses(summary) {
       <div><p class="section-kicker">EXPENSE LOG</p><h2>Recent expenses</h2></div>
       <button class="primary-button compact" data-action="add-expense">＋ Add expense</button>
     </div>
-    ${state.expenses.length ? `<div class="expense-list">${state.expenses.slice().sort(sortExpenses).map(renderExpenseCard).join("")}</div>` : renderEmptyExpenses()}
+    ${state.expenses.length ? `<div class="expense-list">${orderedExpenses().map((expense, index, expenses) => renderExpenseCard(expense, index, expenses.length)).join("")}</div>` : renderEmptyExpenses()}
     <p class="privacy-note">Saved on this device. You can keep adding expenses without a signal.</p>
   `;
 }
 
 function sortExpenses(a, b) {
   return String(b.date || "").localeCompare(String(a.date || "")) || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+}
+
+function orderedExpenses() {
+  const expensesById = new Map(state.expenses.map((expense) => [expense.id, expense]));
+  return state.expenseOrder.map((id) => expensesById.get(id)).filter(Boolean);
 }
 
 function renderEmptyExpenses() {
@@ -280,7 +294,7 @@ function renderEmptyExpenses() {
   `;
 }
 
-function renderExpenseCard(expense) {
+function renderExpenseCard(expense, index, count) {
   const converted = expenseMyr(expense);
   return `
     <article class="expense-card">
@@ -293,7 +307,7 @@ function renderExpenseCard(expense) {
       <div class="expense-card-side">
         <strong>${money(expense.amount, expense.currency)}</strong>
         <span>${converted === null ? "MYR rate needed" : `≈ ${money(converted, "MYR")}`}</span>
-        <div class="card-actions"><button data-action="edit-expense" data-id="${expense.id}">Edit</button><button data-action="delete-expense" data-id="${expense.id}" class="danger-link">Delete</button></div>
+        <div class="card-actions"><button data-action="move-expense-up" data-id="${expense.id}" aria-label="Move ${escapeHtml(expense.details || "expense")} up" ${index === 0 ? "disabled" : ""}>↑</button><button data-action="move-expense-down" data-id="${expense.id}" aria-label="Move ${escapeHtml(expense.details || "expense")} down" ${index === count - 1 ? "disabled" : ""}>↓</button><button data-action="edit-expense" data-id="${expense.id}">Edit</button><button data-action="delete-expense" data-id="${expense.id}" class="danger-link">Delete</button></div>
       </div>
     </article>
   `;
@@ -415,6 +429,8 @@ async function handleAction(event) {
   if (action === "add-expense") renderExpenseModal();
   if (action === "edit-expense") renderExpenseModal(state.expenses.find((item) => item.id === event.currentTarget.dataset.id));
   if (action === "delete-expense") await removeExpense(event.currentTarget.dataset.id);
+  if (action === "move-expense-up") moveExpense(event.currentTarget.dataset.id, -1);
+  if (action === "move-expense-down") moveExpense(event.currentTarget.dataset.id, 1);
   if (action === "open-trip") { activeTab = "trip"; render(); }
   if (action === "open-rates") renderRatesModal();
   if (action === "close-modal" && event.target === event.currentTarget) closeModal();
@@ -466,8 +482,21 @@ async function saveExpense(data) {
     await saveReceipt(next.receiptId, pendingReceipt);
     if (previousReceiptId) await deleteReceipt(previousReceiptId);
   }
-  state.expenses = existing ? state.expenses.map((item) => item.id === id ? next : item) : [...state.expenses, next];
+  if (existing) state.expenses = state.expenses.map((item) => item.id === id ? next : item);
+  else {
+    state.expenses = [...state.expenses, next];
+    state.expenseOrder = [id, ...state.expenseOrder];
+  }
   persist(); closeModal(); render(); showToast(existing ? "Expense updated" : "Expense added");
+}
+
+function moveExpense(id, direction) {
+  const index = state.expenseOrder.indexOf(id);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= state.expenseOrder.length) return;
+  [state.expenseOrder[index], state.expenseOrder[nextIndex]] = [state.expenseOrder[nextIndex], state.expenseOrder[index]];
+  persist();
+  render();
 }
 
 async function removeExpense(id) {
@@ -475,6 +504,7 @@ async function removeExpense(id) {
   if (!expense || !window.confirm("Delete this expense?")) return;
   if (expense.receiptId) await deleteReceipt(expense.receiptId);
   state.expenses = state.expenses.filter((item) => item.id !== id);
+  state.expenseOrder = state.expenseOrder.filter((expenseId) => expenseId !== id);
   persist(); render(); showToast("Expense deleted");
 }
 
@@ -583,7 +613,7 @@ async function exportWorkbook() {
   setCellValue(worksheet, "C6", profile.destination);
   setCellValue(worksheet, "C7", formatDateRange(profile));
   clearTemplateRange(worksheet, EXPENSE_START_ROW, EXPENSE_END_ROW);
-  const sortedExpenses = state.expenses.slice().sort(sortExpenses).reverse();
+  const sortedExpenses = orderedExpenses();
   if (sortedExpenses.length > EXPENSE_END_ROW - EXPENSE_START_ROW + 1) {
     showToast("The template supports up to 68 expense rows");
     return;
