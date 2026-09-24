@@ -14,11 +14,12 @@ const dom = new JSDOM("<!doctype html><html><body><div id=app></div></body></htm
 });
 const { window } = dom;
 let lastDownload = null;
+const clickedAnchors = [];
 window.confirm = () => true;
 window.fetch = async () => ({ arrayBuffer: async () => new window.Uint8Array(templateBytes).buffer });
 window.URL.createObjectURL = (blob) => { lastDownload = { blob, filename: null }; return "blob:trip-claims-test"; };
 window.URL.revokeObjectURL = () => {};
-window.HTMLAnchorElement.prototype.click = function click() { if (lastDownload) lastDownload.filename = this.download; };
+window.HTMLAnchorElement.prototype.click = function click() { clickedAnchors.push(this); if (lastDownload) lastDownload.filename = this.download; };
 window.eval(script);
 
 const wait = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -77,6 +78,7 @@ assert(sheet.getCell("F84").value === 4000000, "advance did not export");
 assert(sheet.getCell("D91").value.result === 1000000, "cash return did not export");
 assert(sheet.getCell("E88").value === null && sheet.getCell("G88").value === null, "stale template cash-return allocation remained");
 const directDownloadFilename = lastDownload.filename;
+const anchorsAfterDirectDownload = clickedAnchors.length;
 
 let sharedFile = null;
 Object.defineProperty(window.navigator, "canShare", { configurable: true, value: () => true });
@@ -86,11 +88,15 @@ window.document.querySelector('[data-action="export-xlsx"]').click();
 for (let attempt = 0; attempt < 80 && !window.document.querySelector('[data-action="share-export"]'); attempt += 1) await wait(50);
 const shareButton = window.document.querySelector('[data-action="share-export"]');
 assert(shareButton, "share-capable browser did not get a user-activated save button");
-assert(!lastDownload, "share-capable browser tried to auto-download before user activation");
+assert(clickedAnchors.length === anchorsAfterDirectDownload, "share-capable browser auto-clicked a download before user activation");
+const downloadLink = window.document.querySelector(".export-download");
+assert(downloadLink?.download === "Sample-City-expense-claim.xlsx", "share-capable browser did not get a direct Excel download link");
 shareButton.click();
 await wait();
 assert(sharedFile?.name === "Sample-City-expense-claim.xlsx", "share action did not receive the generated Excel file");
 assert(sharedFile.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "share action received an incorrect file type");
+downloadLink.click();
+assert(clickedAnchors.at(-1) === downloadLink, "direct Excel download link was not user-clickable");
 
 console.log(JSON.stringify({
   rendered: true,

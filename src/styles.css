@@ -115,6 +115,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .export-metrics span { color: var(--muted); font-size: 10px; }
 .export-metrics strong { margin-top: 4px; font-size: 13px; }
 .export-card .secondary-button { margin-top: 9px; }
+.export-card a.secondary-button { text-decoration: none; }
 .receipt-picker { display: flex; align-items: center; gap: 10px; min-height: 62px; margin-top: 14px; padding: 9px 11px; border: 1px dashed #d0d5dd; border-radius: 12px; color: var(--ink); background: #fcfcfd; cursor: pointer; }
 .receipt-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .receipt-picker-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--accent-dark); background: #fff7ed; font-size: 21px; }

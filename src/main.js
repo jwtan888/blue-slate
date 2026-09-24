@@ -509,6 +509,7 @@ function clearTemplateRange(worksheet, startRow, endRow, startCol = 1, endCol = 
 
 function exportFile(buffer, filename, type = "application/octet-stream") {
   const file = new File([buffer], filename, { type });
+  const url = URL.createObjectURL(file);
   pendingExportFile = null;
   document.querySelectorAll('[data-action="share-export"]').forEach((button) => button.remove());
   const exportCard = document.querySelector(".export-card");
@@ -519,11 +520,17 @@ function exportFile(buffer, filename, type = "application/octet-stream") {
     button.dataset.action = "share-export";
     button.textContent = `Save or share ${filename}`;
     button.addEventListener("click", sharePendingExport);
+    const downloadLink = document.createElement("a");
+    downloadLink.className = "secondary-button wide export-download";
+    downloadLink.href = url;
+    downloadLink.download = filename;
+    downloadLink.textContent = "Download Excel file instead";
     exportCard.appendChild(button);
-    showToast("File ready. Tap the button below, then choose Save to Files.");
+    exportCard.appendChild(downloadLink);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    showToast("File ready. Share it, or tap Download Excel file instead.");
     return true;
   }
-  const url = URL.createObjectURL(file);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
@@ -543,10 +550,10 @@ function sharePendingExport() {
       document.querySelector('[data-action="share-export"]')?.remove();
       showToast("File shared or saved");
     }).catch((error) => {
-      showToast(error?.name === "AbortError" ? "Sharing cancelled" : "Could not share the file. Tap to try again.");
+      showToast(error?.name === "AbortError" ? "Sharing cancelled. Use Download Excel file instead." : "Sharing failed. Use Download Excel file instead.");
     });
   } catch {
-    showToast("Could not share the file. Tap to try again.");
+    showToast("Sharing failed. Use Download Excel file instead.");
   }
 }
 
