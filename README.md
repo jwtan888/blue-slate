@@ -1,6 +1,6 @@
 # Trip Claims
 
-An offline-first mobile web app for capturing business-trip expenses and exporting the supplied South Island Garment travel reimbursement workbook.
+An offline-first mobile web app for capturing business-trip expenses travel reimbursement workbook.
 
 ## Run locally
 
